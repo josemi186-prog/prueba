@@ -1,186 +1,267 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
-import { GameState, StoryNode, PlayerStats } from './types';
-import { getNextStoryNode } from './geminiService';
-import CharacterCard from './components/CharacterCard';
-import LibreroMiniGame from './components/LibreroMiniGame';
+import React from 'react';
 
 const App: React.FC = () => {
-  const [gameState, setGameState] = useState<GameState>(GameState.START);
-  const [currentStory, setCurrentStory] = useState<StoryNode | null>(null);
-  const [stats, setStats] = useState<PlayerStats>({
-    connection: 20,
-    orderLevel: 80,
-    humorLevel: 90,
-    booksSorted: 0
-  });
-  const [loading, setLoading] = useState(false);
-  const [showMiniGame, setShowMiniGame] = useState(false);
-
-  const loadStory = async (choiceText: string = "Inicio") => {
-    setLoading(true);
-    try {
-      const nextNode = await getNextStoryNode(
-        currentStory?.chapter || "1",
-        choiceText,
-        stats
-      );
-      setCurrentStory(nextNode);
-      setGameState(GameState.STORY);
-    } catch (error) {
-      console.error("Error loading story:", error);
-    } finally {
-      setLoading(false);
-    }
+  const featuredMatch = {
+    tournament: 'Masters de Lisboa 2024',
+    teams: ['Nova', 'Raven'],
+    time: 'Hoy · 19:30 CET',
+    bestOf: 'Bo3',
+    mapPool: ['Mirage', 'Inferno', 'Nuke'],
+    odds: '53% vs 47%',
+    headline: 'Nova llega con 8 victorias seguidas y Raven estrena coach.'
   };
 
-  const handleChoice = (choice: any) => {
-    // Logic to update stats based on choice type
-    const newStats = { ...stats };
-    if (choice.type === 'intellectual') newStats.connection += 5;
-    if (choice.type === 'affectionate') newStats.connection += 10;
-    
-    // Random chance of mini-game or "desastre"
-    if (Math.random() > 0.7) {
-      setShowMiniGame(true);
-    } else {
-      setStats(newStats);
-      loadStory(choice.text);
+  const upcomingMatches = [
+    {
+      time: '16:00',
+      event: 'Challenger Stage',
+      teams: ['Lynx', 'Orbit'],
+      format: 'Bo1',
+      status: 'En 2h'
+    },
+    {
+      time: '18:15',
+      event: 'Liga Iberia',
+      teams: ['Malaga Five', 'GranCan'],
+      format: 'Bo3',
+      status: 'En 4h'
+    },
+    {
+      time: '20:45',
+      event: 'Open Europa',
+      teams: ['Aurora', 'Valkyrie'],
+      format: 'Bo3',
+      status: 'En 6h'
+    },
+    {
+      time: '22:10',
+      event: 'Pro Series',
+      teams: ['Sombra', 'Tornado'],
+      format: 'Bo1',
+      status: 'En 8h'
     }
-  };
+  ];
 
-  const handleMiniGameComplete = (success: boolean) => {
-    setShowMiniGame(false);
-    if (success) {
-      setStats(prev => ({ ...prev, connection: prev.connection + 15, booksSorted: prev.booksSorted + 1 }));
-      alert("¡Éxito! JR está impresionado. Tu conexión con el catálogo (y con Vero/JM) aumenta.");
-    } else {
-      alert("¡Desastre! El sistema se ha colgado y JR está echando humo. Pero oye, al menos os habéis reído.");
+  const latestNews = [
+    {
+      title: 'Raven anuncia a Kiro como nuevo IGL tras la salida de Pola.',
+      tag: 'Fichajes',
+      time: 'Hace 23 min'
+    },
+    {
+      title: 'Nova domina en Mirage y se mete en semifinales de Masters.',
+      tag: 'Resultados',
+      time: 'Hace 1 h'
+    },
+    {
+      title: 'Guía del meta: por qué el doble AWP vuelve a estar de moda.',
+      tag: 'Análisis',
+      time: 'Hace 2 h'
+    },
+    {
+      title: 'GranCan gana su primer título regional en Tenerife.',
+      tag: 'Regiones',
+      time: 'Hace 5 h'
     }
-    loadStory("Tras el lío de los libros");
-  };
+  ];
 
-  if (gameState === GameState.START) {
-    return (
-      <div className="min-h-screen book-texture flex flex-col items-center justify-center p-6 text-center">
-        <div className="max-w-3xl bg-white/80 backdrop-blur shadow-2xl rounded-3xl p-12 border border-amber-100">
-          <h1 className="text-6xl font-bold mb-4 serif text-amber-900 leading-tight">
-            Agapea: <br/> <span className="text-amber-700 italic">El Catálogo del Destino</span>
-          </h1>
-          <p className="text-xl text-stone-600 mb-8 max-w-lg mx-auto leading-relaxed">
-            Dos historiadores, miles de libros y un fleje de desastres por venir. <br/>
-            ¿Lograrán superar la distancia entre Gran Canaria y Málaga?
-          </p>
-          <button 
-            onClick={() => loadStory()}
-            className="bg-amber-800 hover:bg-amber-900 text-white px-10 py-4 rounded-full text-xl font-bold transition-all transform hover:scale-105 shadow-xl"
-          >
-            Abrir el Libro del Destino
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const rankings = [
+    { position: 1, team: 'Nova', points: 1000, trend: '+1' },
+    { position: 2, team: 'Raven', points: 985, trend: '-1' },
+    { position: 3, team: 'Aurora', points: 942, trend: '+2' },
+    { position: 4, team: 'Valkyrie', points: 920, trend: '0' },
+    { position: 5, team: 'Sombra', points: 901, trend: '+1' }
+  ];
+
+  const featuredVideos = [
+    {
+      title: 'Top 5 clutchs de la semana',
+      duration: '6:42'
+    },
+    {
+      title: 'Ruta táctica de Nuke para equipos semiprofesionales',
+      duration: '10:18'
+    },
+    {
+      title: 'Entrevista exclusiva con el coach de Nova',
+      duration: '8:05'
+    }
+  ];
 
   return (
-    <div className="min-h-screen bg-stone-100 flex flex-col lg:flex-row">
-      {/* Sidebar: Status & Characters */}
-      <aside className="lg:w-80 bg-stone-200/50 p-6 border-r border-stone-300 flex flex-col gap-6 overflow-y-auto max-h-screen sticky top-0">
-        <div className="bg-amber-900 text-white p-4 rounded-lg shadow-inner">
-          <h2 className="text-xs uppercase tracking-tighter opacity-70 mb-1">Estado de la Relación</h2>
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <header className="border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">❤️</span>
-            <div className="flex-1">
-              <div className="h-3 bg-stone-700 rounded-full overflow-hidden">
-                <div className="h-full bg-red-500 transition-all duration-1000" style={{ width: `${Math.min(stats.connection, 100)}%` }}></div>
-              </div>
-              <span className="text-xs font-bold">{stats.connection}/100 Conexión</span>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500 text-white font-extrabold">
+              HL
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">ArenaCS</p>
+              <h1 className="text-lg font-semibold">El portal de Counter-Strike en español</h1>
             </div>
           </div>
-        </div>
-
-        <CharacterCard 
-          name="JM" 
-          description="1.88m, Barba, fan de los esquemas."
-          image="https://picsum.photos/seed/jm/300"
-          accentColor="border-blue-600"
-          stats={[{ label: 'Orden', value: stats.orderLevel }, { label: 'Paciencia', value: 85 }]}
-        />
-        
-        <CharacterCard 
-          name="Vero" 
-          description="1.60m, Pelazo rizado, humor canario."
-          image="https://picsum.photos/seed/vero/300"
-          accentColor="border-amber-500"
-          stats={[{ label: 'Humor', value: stats.humorLevel }, { label: 'Energía', value: 95 }]}
-        />
-
-        <div className="mt-auto p-4 bg-white/50 rounded-lg text-sm italic text-stone-500 border border-stone-300">
-          "La historia no es lo que pasó, sino lo que recordamos juntos."
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 p-6 lg:p-12 overflow-y-auto">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center h-full">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-amber-800 mb-4"></div>
-            <p className="serif text-xl italic text-stone-600">Consultando los archivos de Agapea...</p>
+          <nav className="flex flex-wrap items-center gap-4 text-sm font-semibold text-slate-600">
+            <a className="hover:text-amber-600" href="#noticias">Noticias</a>
+            <a className="hover:text-amber-600" href="#partidos">Partidos</a>
+            <a className="hover:text-amber-600" href="#rankings">Rankings</a>
+            <a className="hover:text-amber-600" href="#videos">Videos</a>
+            <a className="hover:text-amber-600" href="#estadisticas">Estadísticas</a>
+          </nav>
+          <div className="flex items-center gap-2">
+            <button className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:border-amber-400 hover:text-amber-600">
+              Entrar
+            </button>
+            <button className="rounded-full bg-amber-500 px-4 py-2 text-xs font-semibold text-white">
+              Seguir torneo
+            </button>
           </div>
-        ) : showMiniGame ? (
-          <LibreroMiniGame onComplete={handleMiniGameComplete} type={Math.random() > 0.5 ? 'nike' : 'condorito'} />
-        ) : currentStory && (
-          <div className="max-w-4xl mx-auto">
-            <header className="mb-10">
-              <div className="flex items-center gap-2 text-amber-700 font-bold mb-2 uppercase tracking-widest text-sm">
-                <span>📅 {currentStory.date}</span>
-                <span>•</span>
-                <span>📍 {currentStory.chapter}</span>
+        </div>
+      </header>
+
+      <main className="mx-auto grid max-w-6xl gap-8 px-4 pb-16 pt-8 lg:grid-cols-[2.1fr_1fr]">
+        <section className="space-y-8">
+          <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-amber-600">Partido destacado</p>
+                <h2 className="mt-2 text-3xl font-bold">{featuredMatch.teams[0]} vs {featuredMatch.teams[1]}</h2>
+                <p className="mt-2 text-sm text-slate-500">{featuredMatch.tournament} · {featuredMatch.time}</p>
               </div>
-              <h1 className="text-5xl font-bold serif text-stone-900 mb-6 leading-tight border-b-2 border-amber-200 pb-4">
-                {currentStory.title}
-              </h1>
-            </header>
-
-            <div className="bg-white p-8 lg:p-12 rounded-3xl shadow-xl border border-stone-200 relative overflow-hidden mb-10">
-              {/* Decorative elements */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-50 rounded-bl-full -mr-10 -mt-10 opacity-50"></div>
-              
-              <p className="text-xl lg:text-2xl leading-relaxed text-stone-800 serif whitespace-pre-wrap">
-                {currentStory.text}
-              </p>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-6 py-4 text-sm text-amber-700">
+                <p className="font-semibold">{featuredMatch.bestOf}</p>
+                <p className="mt-2">{featuredMatch.odds}</p>
+              </div>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {currentStory.choices.map((choice, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleChoice(choice)}
-                  className={`group relative p-6 rounded-2xl border-2 text-left transition-all hover:shadow-xl transform hover:-translate-y-1 active:scale-95
-                    ${choice.type === 'intellectual' ? 'border-blue-100 bg-blue-50 hover:border-blue-300' : 
-                      choice.type === 'affectionate' ? 'border-pink-100 bg-pink-50 hover:border-pink-300' : 
-                      'border-stone-200 bg-white hover:border-stone-400'}`}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-2xl">
-                      {choice.type === 'intellectual' ? '📜' : choice.type === 'affectionate' ? '✨' : '⚡'}
-                    </span>
-                    <span className="text-xs uppercase font-bold tracking-widest text-stone-400">
-                      {choice.type}
-                    </span>
-                  </div>
-                  <span className="text-lg font-bold text-stone-800 leading-tight">
-                    {choice.text}
-                  </span>
-                  <div className="mt-2 text-xs text-stone-500 opacity-0 group-hover:opacity-100 transition-opacity italic">
-                    {choice.consequence || "Tu decisión dará forma al catálogo..."}
-                  </div>
-                </button>
+            <p className="mt-6 text-lg text-slate-700">{featuredMatch.headline}</p>
+            <div className="mt-6 flex flex-wrap gap-3 text-xs font-semibold uppercase">
+              {featuredMatch.mapPool.map((map) => (
+                <span key={map} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
+                  {map}
+                </span>
               ))}
             </div>
+            <div className="mt-8 flex flex-wrap gap-4">
+              <button className="rounded-full bg-amber-500 px-6 py-3 text-sm font-semibold text-white">
+                Ver previa
+              </button>
+              <button className="rounded-full border border-slate-300 px-6 py-3 text-sm font-semibold text-slate-700">
+                Añadir al calendario
+              </button>
+            </div>
           </div>
-        )}
+
+          <section id="noticias" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-semibold">Últimas noticias</h3>
+              <button className="text-xs font-semibold text-amber-600">Ver todo</button>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {latestNews.map((item) => (
+                <article key={item.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">{item.tag}</span>
+                    <span>{item.time}</span>
+                  </div>
+                  <h4 className="mt-3 text-lg font-semibold text-slate-900">{item.title}</h4>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section id="partidos" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-semibold">Partidos en directo</h3>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">4 próximos</span>
+            </div>
+            <div className="space-y-3">
+              {upcomingMatches.map((match) => (
+                <div key={`${match.time}-${match.event}`} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div>
+                    <p className="text-sm text-slate-500">{match.time} · {match.event}</p>
+                    <p className="mt-1 text-lg font-semibold">{match.teams[0]} <span className="text-slate-400">vs</span> {match.teams[1]}</p>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="rounded-full border border-slate-200 px-3 py-1 text-slate-600">{match.format}</span>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">{match.status}</span>
+                    <button className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white">Ver</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </section>
+
+        <aside className="space-y-6">
+          <section id="rankings" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Ranking mundial</h3>
+              <span className="text-xs text-slate-400">Actualizado hoy</span>
+            </div>
+            <div className="mt-4 space-y-3">
+              {rankings.map((team) => (
+                <div key={team.team} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-semibold text-amber-600">#{team.position}</span>
+                    <div>
+                      <p className="text-sm font-semibold">{team.team}</p>
+                      <p className="text-xs text-slate-500">{team.points} pts</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold text-emerald-600">{team.trend}</span>
+                </div>
+              ))}
+            </div>
+            <button className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700">
+              Ver ranking completo
+            </button>
+          </section>
+
+          <section id="videos" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-semibold">Videos recomendados</h3>
+            <div className="mt-4 space-y-4">
+              {featuredVideos.map((video) => (
+                <div key={video.title} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold">{video.title}</p>
+                    <p className="text-xs text-slate-500">{video.duration}</p>
+                  </div>
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Play</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section id="estadisticas" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-semibold">Panel de estadísticas</h3>
+            <div className="mt-4 space-y-3 text-sm text-slate-600">
+              <div className="flex items-start gap-3">
+                <span className="mt-1 h-2 w-2 rounded-full bg-amber-500"></span>
+                <p>Raven juega con nuevo rifler: atención a las bajas tempranas.</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="mt-1 h-2 w-2 rounded-full bg-emerald-500"></span>
+                <p>Nova mantiene un 78% de winrate en Inferno esta temporada.</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="mt-1 h-2 w-2 rounded-full bg-sky-500"></span>
+                <p>Se abre el clasificatorio para la Liga Iberia 2025.</p>
+              </div>
+            </div>
+          </section>
+        </aside>
       </main>
+
+      <footer className="border-t border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 text-xs text-slate-500 sm:flex-row">
+          <p>© 2024 ArenaCS. Inspirado en las mejores coberturas de esports.</p>
+          <div className="flex gap-4">
+            <a className="hover:text-amber-600" href="#">Política</a>
+            <a className="hover:text-amber-600" href="#">Contacto</a>
+            <a className="hover:text-amber-600" href="#">Newsletter</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
