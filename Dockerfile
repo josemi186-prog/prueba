@@ -24,7 +24,7 @@ RUN apt-get update \
     && mkdir -p /tmp/libreoffice \
     && tar -xzf /tmp/libreoffice.tar.gz -C /tmp/libreoffice --strip-components=1 \
     && apt-get install -y --no-install-recommends /tmp/libreoffice/DEBS/*.deb \
-    && ln -sf /opt/libreoffice26.2/program/soffice /usr/local/bin/soffice \
+    && ln -sf "$(find /opt -type f -path '*/program/soffice' -print -quit)" /usr/local/bin/soffice \
     && soffice --headless --version \
     && rm -rf /tmp/libreoffice /tmp/libreoffice.tar.gz \
     && rm -rf /var/lib/apt/lists/*
