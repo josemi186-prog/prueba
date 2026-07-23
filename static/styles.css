@@ -171,6 +171,20 @@ nav button.active, nav button:hover { background: #243447; border-color: #334155
   align-items: center;
 }
 .upload-row input { max-width: 460px; }
+.sheet-panel {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.sheet-panel label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+.sheet-panel select {
+  flex: 1 1 420px;
+  min-width: 240px;
+}
 .filters input { flex: 1 1 300px; }
 .filters select { width: auto; min-width: 190px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
