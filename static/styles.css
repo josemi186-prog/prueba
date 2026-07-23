@@ -297,6 +297,26 @@ td.truncate { max-width: 260px; white-space: nowrap; overflow: hidden; text-over
   font-size: 13px;
   font-weight: 700;
 }
+.pdf-engine-status {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.pdf-engine-status span { color: #526274; }
+.pdf-engine-status.ready {
+  background: #edf9f3;
+  color: #17643d;
+}
+.pdf-engine-status.warning {
+  background: #fff4e5;
+  color: #8a4b08;
+}
+.pdf-engine-status.checking {
+  background: #eef2f6;
+  color: #526274;
+}
 #templatePreview {
   display: block;
   width: 100%;
