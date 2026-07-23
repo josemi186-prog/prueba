@@ -49,6 +49,7 @@ function bindEvents() {
   document.getElementById('loginForm').addEventListener('submit', login);
   document.getElementById('logoutBtn').addEventListener('click', logout);
   document.getElementById('excelForm').addEventListener('submit', event => uploadForm(event, '/api/upload-excel'));
+  document.getElementById('selectExcelSheetBtn').addEventListener('click', selectExcelSheet);
   document.getElementById('templateForm').addEventListener('submit', event => uploadForm(event, '/api/upload-template'));
   document.getElementById('templateSelect').addEventListener('change', updateTemplateActions);
   document.getElementById('renameTemplateBtn').addEventListener('click', renameTemplate);
@@ -174,6 +175,7 @@ function switchView(view) {
 function renderAll() {
   renderDashboard();
   renderValidation();
+  renderExcelSheets();
   renderFields();
   renderFilters();
   renderStudents();
@@ -211,6 +213,47 @@ function renderValidation() {
     ['Filas incompletas', v.incomplete ?? 0],
   ];
   document.getElementById('validationCards').innerHTML = cards.map(([label, value]) => metric(label, value)).join('');
+}
+
+function renderExcelSheets() {
+  const panel = document.getElementById('excelSheetPanel');
+  const select = document.getElementById('excelSheetSelect');
+  const hint = document.getElementById('excelSheetHint');
+  const excel = state.data.excel || {};
+  const sheets = excel.sheets || [];
+  panel.classList.toggle('hidden', sheets.length === 0);
+  if (!sheets.length) return;
+  select.innerHTML = sheets.map(sheet => {
+    const status = sheet.valid
+      ? `${sheet.row_count} alumno(s), columnas correctas`
+      : `${sheet.row_count} fila(s), ${sheet.required_columns}/${REQUIRED_FIELDS.length} columnas obligatorias`;
+    return `<option value="${escapeAttr(sheet.name)}">${escapeHtml(sheet.name)} - ${escapeHtml(status)}</option>`;
+  }).join('');
+  select.value = excel.sheet_name || sheets[0].name;
+  const updateHint = () => {
+    const current = sheets.find(sheet => sheet.name === select.value);
+    hint.textContent = current?.valid
+      ? 'Esta pestaña contiene todas las columnas obligatorias.'
+      : `Se han reconocido ${current?.required_columns || 0} de ${REQUIRED_FIELDS.length} columnas obligatorias.`;
+  };
+  select.onchange = updateHint;
+  updateHint();
+}
+
+async function selectExcelSheet() {
+  const sheetName = document.getElementById('excelSheetSelect').value;
+  if (!sheetName) return;
+  const result = await api('/api/select-excel-sheet', {
+    method: 'POST',
+    body: JSON.stringify({ sheet_name: sheetName }),
+  });
+  if (!result.ok) return toast(result.error || 'No se pudo cambiar de pestaña.');
+  state.data = result.state;
+  state.validation = result.validation || state.validation;
+  state.availableFields = result.available_fields || state.availableFields;
+  state.selected.clear();
+  renderAll();
+  toast(`Pestaña "${sheetName}" cargada correctamente.`);
 }
 
 function metric(label, value) {
