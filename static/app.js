@@ -331,7 +331,7 @@ function renderPdfEngineStatus() {
   box.className = `pdf-engine-status ${engine.ready ? 'ready' : 'warning'}`;
   box.innerHTML = engine.ready
     ? `<strong>Motor PDF correcto</strong><span>${version} · Fuente para Cambria: ${font}</span>`
-    : `<strong>Motor PDF pendiente de corregir</strong><span>${version} · Fuente para Cambria: ${font}. Esperado: LibreOffice ${escapeHtml(engine.expected_version || '26.2.3')} y Cambria/Caladea.</span>`;
+    : `<strong>Motor PDF pendiente de corregir</strong><span>${version} · Fuente para Cambria: ${font}. Esperado: LibreOffice ${escapeHtml(engine.expected_version || '26.2')} y Cambria/Caladea.</span>`;
 }
 
 function updateTemplateActions() {
