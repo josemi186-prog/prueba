@@ -1029,7 +1029,7 @@ def pdf_engine_status() -> dict:
     elif os.name == "nt":
         font_match = "Cambria (Windows)"
 
-    expected_version = "26.2.3"
+    expected_version = "26.2"
     version_ok = expected_version in version
     font_ok = font_match.lower() in {"cambria", "caladea", "cambria (windows)"}
     _PDF_ENGINE_CACHE = {
