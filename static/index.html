@@ -86,6 +86,14 @@
             <input type="file" name="file" accept=".xlsx,.csv" required>
             <button class="primary" type="submit">Subir y validar</button>
           </form>
+          <div id="excelSheetPanel" class="sheet-panel hidden">
+            <label for="excelSheetSelect">Pestaña con el listado de alumnos</label>
+            <div class="upload-row">
+              <select id="excelSheetSelect"></select>
+              <button id="selectExcelSheetBtn" class="secondary" type="button">Usar esta pestaña</button>
+            </div>
+            <p id="excelSheetHint" class="hint"></p>
+          </div>
         </article>
         <div class="summary-grid compact" id="validationCards"></div>
         <article class="panel">
