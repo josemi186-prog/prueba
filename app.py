@@ -65,6 +65,7 @@ USERS = {
 
 SESSIONS: dict[str, dict] = {}
 STATE_LOCK = threading.RLock()
+_PDF_ENGINE_CACHE: dict | None = None
 
 
 def ensure_dirs() -> None:
@@ -940,13 +941,21 @@ def ensure_template_preview(template: dict) -> tuple[Path | None, str | None]:
     preview_base = safe_filename(str(template.get("id") or "plantilla"))
     preview_docx = TEMPLATE_PREVIEW_DIR / f"{preview_base}.docx"
     preview_pdf = TEMPLATE_PREVIEW_DIR / f"{preview_base}.pdf"
-    if preview_pdf.exists() and preview_pdf.stat().st_mtime >= source.stat().st_mtime:
+    preview_engine = TEMPLATE_PREVIEW_DIR / f"{preview_base}.engine"
+    engine_signature = str(pdf_engine_status().get("signature", ""))
+    cached_engine = preview_engine.read_text(encoding="utf-8").strip() if preview_engine.exists() else ""
+    if (
+        preview_pdf.exists()
+        and preview_pdf.stat().st_mtime >= source.stat().st_mtime
+        and cached_engine == engine_signature
+    ):
         return preview_pdf, None
     if preview_pdf.exists():
         preview_pdf.unlink()
     shutil.copy2(source, preview_docx)
     ok, message, converted = convert_to_pdf(preview_docx)
     if ok and converted and converted.exists():
+        preview_engine.write_text(engine_signature, encoding="utf-8")
         return converted, None
     return None, message or "No se pudo crear la previsualización."
 
@@ -973,6 +982,66 @@ def find_libreoffice() -> str | None:
         if candidate.exists():
             return str(candidate)
     return None
+
+
+def pdf_engine_status() -> dict:
+    global _PDF_ENGINE_CACHE
+    if _PDF_ENGINE_CACHE is not None:
+        return dict(_PDF_ENGINE_CACHE)
+
+    executable = find_libreoffice()
+    version = ""
+    error = ""
+    if executable:
+        try:
+            version_executable = executable
+            if os.name == "nt":
+                console_executable = Path(executable).with_suffix(".com")
+                if console_executable.exists():
+                    version_executable = str(console_executable)
+            result = subprocess.run(
+                [version_executable, "--headless", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            version = (result.stdout or result.stderr).strip()
+            if result.returncode != 0:
+                error = version or "LibreOffice no pudo iniciarse."
+        except Exception as exc:
+            error = str(exc)
+    else:
+        error = "LibreOffice no está instalado."
+
+    font_match = ""
+    font_tool = shutil.which("fc-match")
+    if font_tool:
+        try:
+            font_result = subprocess.run(
+                [font_tool, "-f", "%{family}", "Cambria"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            font_match = font_result.stdout.strip().split(",")[0]
+        except Exception:
+            font_match = ""
+    elif os.name == "nt":
+        font_match = "Cambria (Windows)"
+
+    expected_version = "26.2.3"
+    version_ok = expected_version in version
+    font_ok = font_match.lower() in {"cambria", "caladea", "cambria (windows)"}
+    _PDF_ENGINE_CACHE = {
+        "ready": bool(executable and not error and version_ok and font_ok),
+        "version": version or "No disponible",
+        "expected_version": expected_version,
+        "font": font_match or "No detectada",
+        "font_ok": font_ok,
+        "error": error,
+        "signature": f"{version}|{font_match}",
+    }
+    return dict(_PDF_ENGINE_CACHE)
 
 
 def pdf_converter_help() -> str:
@@ -1413,7 +1482,14 @@ class DiplomaHandler(SimpleHTTPRequestHandler):
 
     def handle_api_get(self, parsed):
         if parsed.path == "/api/health":
-            json_response(self, {"ok": True, "service": "mainjobs-generador-diplomas"})
+            json_response(
+                self,
+                {
+                    "ok": True,
+                    "service": "mainjobs-generador-diplomas",
+                    "pdf_engine": pdf_engine_status(),
+                },
+            )
             return
         if parsed.path == "/api/session":
             user = get_user(self)
@@ -1426,7 +1502,16 @@ class DiplomaHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/state":
             validation = validate_students(state["students"], state.get("excel", {}).get("columns", ALL_COLUMNS))
             save_state(state)
-            json_response(self, {"ok": True, "state": public_state(state), "validation": validation, "available_fields": available_fields(state)})
+            json_response(
+                self,
+                {
+                    "ok": True,
+                    "state": public_state(state),
+                    "validation": validation,
+                    "available_fields": available_fields(state),
+                    "pdf_engine": pdf_engine_status(),
+                },
+            )
             return
         if parsed.path == "/api/template-preview":
             query = parse_qs(parsed.query)
