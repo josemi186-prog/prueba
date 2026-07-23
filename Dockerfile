@@ -13,6 +13,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        fontconfig \
+        fonts-crosextra-caladea \
+        fonts-crosextra-carlito \
         fonts-dejavu-core \
         fonts-liberation \
         libxinerama1 \
@@ -25,6 +28,7 @@ RUN apt-get update \
     && tar -xzf /tmp/libreoffice.tar.gz -C /tmp/libreoffice --strip-components=1 \
     && apt-get install -y --no-install-recommends /tmp/libreoffice/DEBS/*.deb \
     && ln -sf "$(find /opt -type f -path '*/program/soffice' -print -quit)" /usr/local/bin/soffice \
+    && fc-cache -f \
     && soffice --headless --version \
     && rm -rf /tmp/libreoffice /tmp/libreoffice.tar.gz \
     && rm -rf /var/lib/apt/lists/*
