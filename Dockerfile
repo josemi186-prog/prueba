@@ -1,5 +1,7 @@
 FROM python:3.12-slim-bookworm
 
+ARG LIBREOFFICE_VERSION=26.2.3
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HOST=0.0.0.0 \
@@ -9,10 +11,22 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        libreoffice-core \
-        libreoffice-writer \
+        ca-certificates \
+        curl \
         fonts-dejavu-core \
         fonts-liberation \
+        libxinerama1 \
+        libxrender1 \
+        libxt6 \
+    && curl -fsSL \
+        "https://download.documentfoundation.org/libreoffice/stable/${LIBREOFFICE_VERSION}/deb/x86_64/LibreOffice_${LIBREOFFICE_VERSION}_Linux_x86-64_deb.tar.gz" \
+        -o /tmp/libreoffice.tar.gz \
+    && mkdir -p /tmp/libreoffice \
+    && tar -xzf /tmp/libreoffice.tar.gz -C /tmp/libreoffice --strip-components=1 \
+    && apt-get install -y --no-install-recommends /tmp/libreoffice/DEBS/*.deb \
+    && ln -sf /opt/libreoffice26.2/program/soffice /usr/local/bin/soffice \
+    && soffice --headless --version \
+    && rm -rf /tmp/libreoffice /tmp/libreoffice.tar.gz \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
