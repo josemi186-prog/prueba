@@ -3,6 +3,7 @@ const state = {
   data: null,
   validation: null,
   availableFields: { latin: [], braces: [] },
+  pdfEngine: null,
   selected: new Set(),
   filtered: [],
   emailSelected: new Set(),
@@ -143,6 +144,7 @@ async function refreshState() {
   state.data = result.state;
   state.validation = result.validation;
   state.availableFields = result.available_fields;
+  state.pdfEngine = result.pdf_engine || null;
   renderAll();
 }
 
@@ -312,6 +314,24 @@ function renderTemplate() {
     return `<option value="${escapeAttr(template.id || '')}" ${template.id === activeId ? 'selected' : ''}>${escapeHtml(label)}</option>`;
   }).join('');
   updateTemplateActions();
+  renderPdfEngineStatus();
+}
+
+function renderPdfEngineStatus() {
+  const box = document.getElementById('pdfEngineStatus');
+  if (!box) return;
+  const engine = state.pdfEngine;
+  if (!engine) {
+    box.className = 'pdf-engine-status checking';
+    box.innerHTML = '<strong>Comprobando motor PDF…</strong>';
+    return;
+  }
+  const version = escapeHtml(engine.version || 'No disponible');
+  const font = escapeHtml(engine.font || 'No detectada');
+  box.className = `pdf-engine-status ${engine.ready ? 'ready' : 'warning'}`;
+  box.innerHTML = engine.ready
+    ? `<strong>Motor PDF correcto</strong><span>${version} · Fuente para Cambria: ${font}</span>`
+    : `<strong>Motor PDF pendiente de corregir</strong><span>${version} · Fuente para Cambria: ${font}. Esperado: LibreOffice ${escapeHtml(engine.expected_version || '26.2.3')} y Cambria/Caladea.</span>`;
 }
 
 function updateTemplateActions() {
@@ -326,7 +346,10 @@ function updateTemplateActions() {
   document.getElementById('activeTemplateBadge').textContent = active.is_builtin ? 'Oficial activa' : 'Activa';
   const detected = template?.detected_fields || [];
   document.getElementById('detectedFields').innerHTML = detected.map(field => chip(`«${field}»`)).join('') || '<p class="muted">No se detectaron campos en esta plantilla.</p>';
-  const previewUrl = template ? `/api/template-preview?id=${encodeURIComponent(template.id)}` : '';
+  const engineVersion = state.pdfEngine?.signature || state.pdfEngine?.version || '';
+  const previewUrl = template
+    ? `/api/template-preview?id=${encodeURIComponent(template.id)}&engine=${encodeURIComponent(engineVersion)}`
+    : '';
   const preview = document.getElementById('templatePreview');
   preview.src = previewUrl;
   document.getElementById('openTemplatePreview').href = previewUrl || '#';
