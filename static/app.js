@@ -426,13 +426,26 @@ async function generateCertificates(oneId = null, forcedFormat = null) {
   document.getElementById('progressBar').style.width = '100%';
   setTimeout(() => document.getElementById('progressBar').style.width = '0', 600);
   if (!result.ok) {
-    document.getElementById('generationResult').textContent = result.error || 'No se pudo generar.';
+    if (result.state) {
+      state.data = result.state;
+      renderAll();
+    }
+    const detail = generationErrorDetail(result);
+    document.getElementById('generationResult').textContent = detail;
     return toast(result.error || 'No se pudo generar.');
   }
-  await refreshState();
+  state.data = result.state;
+  renderAll();
   const errorText = result.errors?.length ? ` ${result.errors.length} aviso(s) o error(es).` : '';
   document.getElementById('generationResult').textContent = `Generados ${result.generated.length} certificado(s).${errorText}`;
-  toast('Generación finalizada.');
+  toast(result.generated.length ? 'Certificados generados.' : 'No se generó ningún certificado.');
+}
+
+function generationErrorDetail(result) {
+  const messages = (result.errors || []).map(item => item.message).filter(Boolean);
+  const unique = [...new Set(messages)];
+  const summary = result.error || 'No se pudo generar ningún certificado.';
+  return unique.length ? `${summary}\n${unique.slice(0, 3).join('\n')}` : summary;
 }
 
 function renderDownloads() {

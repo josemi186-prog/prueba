@@ -1065,6 +1065,12 @@ def generate_for_students(student_ids: list[str], fmt: str, user: dict) -> dict:
         return {"ok": False, "error": "Sube una plantilla Word antes de generar certificados."}
     students = state["students"]
     selected = [student for student in students if student.get("id") in student_ids]
+    if not selected:
+        return {
+            "ok": False,
+            "error": "No se encontraron los alumnos seleccionados. Recarga la página y vuelve a seleccionarlos.",
+            "state": public_state(state),
+        }
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = GENERATED_DIR / timestamp
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1086,13 +1092,14 @@ def generate_for_students(student_ids: list[str], fmt: str, user: dict) -> dict:
                 student_files.append({"type": "docx", "name": docx_name, "path": str(docx_path)})
             if fmt in ("pdf", "both"):
                 ok, message, pdf_path = convert_to_pdf(docx_path)
-                if ok and pdf_path:
+                if ok and pdf_path and pdf_path.exists():
                     student_files.append({"type": "pdf", "name": pdf_path.name, "path": str(pdf_path)})
                 else:
-                    errors.append({"student_id": student["id"], "message": message})
                     if fmt == "pdf":
                         warnings = "; ".join(item for item in [warnings, f"PDF no generado: {message}"] if item)
                         raise RuntimeError(warnings)
+                    warnings = "; ".join(item for item in [warnings, f"PDF no generado: {message}"] if item)
+                    errors.append({"student_id": student["id"], "message": warnings})
             if not student_files:
                 raise ValueError(f"Formato de generación no reconocido: {fmt}")
             student["files"] = student_files
@@ -1109,7 +1116,21 @@ def generate_for_students(student_ids: list[str], fmt: str, user: dict) -> dict:
             append_history(state, user, student, fmt, "error", message, "")
     state["last_generation"] = datetime.now().isoformat(timespec="seconds")
     save_state(state)
-    return {"ok": True, "generated": generated, "errors": errors, "students": students}
+    if not generated:
+        first_error = errors[0]["message"] if errors else "No se creó ningún archivo."
+        return {
+            "ok": False,
+            "error": f"No se pudo generar ningún certificado. {first_error}",
+            "generated": [],
+            "errors": errors,
+            "state": public_state(state),
+        }
+    return {
+        "ok": True,
+        "generated": generated,
+        "errors": errors,
+        "state": public_state(state),
+    }
 
 
 def append_history(state: dict, user: dict, student: dict, fmt: str, status: str, message: str, filename: str) -> None:
