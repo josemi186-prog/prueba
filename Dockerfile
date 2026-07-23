@@ -1,8 +1,7 @@
-FROM python:3.12-slim-bookworm
+FROM ubuntu:26.04
 
-ARG LIBREOFFICE_VERSION=26.2.3
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HOST=0.0.0.0 \
     PORT=8000 \
@@ -11,26 +10,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
+        python3 \
+        libreoffice-core \
+        libreoffice-writer \
         fontconfig \
         fonts-crosextra-caladea \
         fonts-crosextra-carlito \
         fonts-dejavu-core \
         fonts-liberation \
-        libxinerama1 \
-        libxrender1 \
-        libxt6 \
-    && curl -fsSL \
-        "https://download.documentfoundation.org/libreoffice/stable/${LIBREOFFICE_VERSION}/deb/x86_64/LibreOffice_${LIBREOFFICE_VERSION}_Linux_x86-64_deb.tar.gz" \
-        -o /tmp/libreoffice.tar.gz \
-    && mkdir -p /tmp/libreoffice \
-    && tar -xzf /tmp/libreoffice.tar.gz -C /tmp/libreoffice --strip-components=1 \
-    && apt-get install -y --no-install-recommends /tmp/libreoffice/DEBS/*.deb \
-    && ln -sf "$(find /opt -type f -path '*/program/soffice' -print -quit)" /usr/local/bin/soffice \
     && fc-cache -f \
     && soffice --headless --version \
-    && rm -rf /tmp/libreoffice /tmp/libreoffice.tar.gz \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -43,4 +32,4 @@ RUN mkdir -p /app/data/uploads /app/data/generated
 
 EXPOSE 8000
 
-CMD ["python", "app.py"]
+CMD ["python3", "app.py"]
