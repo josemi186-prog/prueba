@@ -50,6 +50,7 @@ function bindEvents() {
   document.getElementById('excelForm').addEventListener('submit', event => uploadForm(event, '/api/upload-excel'));
   document.getElementById('templateForm').addEventListener('submit', event => uploadForm(event, '/api/upload-template'));
   document.getElementById('templateSelect').addEventListener('change', updateTemplateActions);
+  document.getElementById('renameTemplateBtn').addEventListener('click', renameTemplate);
   document.getElementById('selectTemplateBtn').addEventListener('click', selectTemplate);
   document.getElementById('deleteTemplateBtn').addEventListener('click', deleteTemplate);
   ['searchInput', 'statusFilter', 'activityFilter', 'specialtyFilter', 'locationFilter', 'dateFilter'].forEach(id => {
@@ -193,7 +194,7 @@ function renderDashboard() {
     ['Certificados generados', generated],
     ['Registros con errores', errors],
     ['Última carga de Excel', state.data.excel?.filename || 'Sin Excel'],
-    ['Última plantilla utilizada', state.data.template?.filename || 'Sin plantilla'],
+    ['Última plantilla utilizada', state.data.template?.name || state.data.template?.filename || 'Sin plantilla'],
   ];
   document.getElementById('summaryCards').innerHTML = cards.map(([label, value]) => metric(label, value)).join('');
 }
@@ -303,28 +304,51 @@ function renderSelectionInfo() {
 }
 
 function renderTemplate() {
-  const detected = state.data.template?.detected_fields || [];
-  document.getElementById('detectedFields').innerHTML = detected.map(field => chip(`«${field}»`)).join('') || '<p class="muted">Sube una plantilla para detectar campos.</p>';
   const templates = state.data.templates || (state.data.template ? [state.data.template] : []);
   const activeId = state.data.active_template_id || state.data.template?.id || '';
   const select = document.getElementById('templateSelect');
   select.innerHTML = templates.map(template => {
-    const label = `${template.filename || 'Plantilla sin nombre'}${template.is_builtin ? ' · incluida' : ''}`;
+    const label = `${template.name || template.filename || 'Plantilla sin nombre'}${template.is_builtin ? ' · incluida' : ''}`;
     return `<option value="${escapeAttr(template.id || '')}" ${template.id === activeId ? 'selected' : ''}>${escapeHtml(label)}</option>`;
   }).join('');
-  const active = templates.find(template => template.id === activeId) || state.data.template || {};
-  document.getElementById('activeTemplateInfo').textContent = active.filename
-    ? `Plantilla activa: ${active.filename}`
-    : 'No hay ninguna plantilla activa.';
-  document.getElementById('activeTemplateBadge').textContent = active.is_builtin ? 'Oficial activa' : 'Activa';
   updateTemplateActions();
 }
 
 function updateTemplateActions() {
   const templateId = document.getElementById('templateSelect').value;
   const template = (state.data?.templates || []).find(item => item.id === templateId);
+  const active = (state.data?.templates || []).find(item => item.id === state.data.active_template_id) || state.data.template || {};
+  const isActive = Boolean(template && templateId === state.data.active_template_id);
+  document.getElementById('templateName').value = template?.name || template?.filename?.replace(/\.docx$/i, '') || '';
+  document.getElementById('activeTemplateInfo').textContent = active.name || active.filename
+    ? `Plantilla activa: ${active.name || active.filename}`
+    : 'No hay ninguna plantilla activa.';
+  document.getElementById('activeTemplateBadge').textContent = active.is_builtin ? 'Oficial activa' : 'Activa';
+  const detected = template?.detected_fields || [];
+  document.getElementById('detectedFields').innerHTML = detected.map(field => chip(`«${field}»`)).join('') || '<p class="muted">No se detectaron campos en esta plantilla.</p>';
+  const previewUrl = template ? `/api/template-preview?id=${encodeURIComponent(template.id)}` : '';
+  const preview = document.getElementById('templatePreview');
+  preview.src = previewUrl;
+  document.getElementById('openTemplatePreview').href = previewUrl || '#';
+  document.getElementById('renameTemplateBtn').disabled = !template;
   document.getElementById('selectTemplateBtn').disabled = !template || templateId === state.data.active_template_id;
   document.getElementById('deleteTemplateBtn').disabled = !template || Boolean(template.is_builtin);
+}
+
+async function renameTemplate() {
+  const templateId = document.getElementById('templateSelect').value;
+  const name = document.getElementById('templateName').value.trim();
+  if (!templateId || !name) return toast('Escribe un nombre para la plantilla.');
+  const result = await api('/api/rename-template', {
+    method: 'POST',
+    body: JSON.stringify({ template_id: templateId, name }),
+  });
+  if (!result.ok) return toast(result.error || 'No se pudo cambiar el nombre.');
+  state.data = result.state;
+  renderAll();
+  document.getElementById('templateSelect').value = templateId;
+  updateTemplateActions();
+  toast('Nombre de plantilla guardado.');
 }
 
 async function selectTemplate() {
@@ -345,7 +369,7 @@ async function deleteTemplate() {
   const templateId = document.getElementById('templateSelect').value;
   const template = (state.data.templates || []).find(item => item.id === templateId);
   if (!template || template.is_builtin) return;
-  if (!confirm(`¿Eliminar la plantilla "${template.filename}"?`)) return;
+  if (!confirm(`¿Eliminar la plantilla "${template.name || template.filename}"?`)) return;
   const result = await api('/api/delete-template', {
     method: 'POST',
     body: JSON.stringify({ template_id: templateId }),

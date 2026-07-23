@@ -144,10 +144,28 @@
             </div>
             <span class="status generado" id="activeTemplateBadge">Activa</span>
           </div>
-          <div class="template-picker">
-            <select id="templateSelect" aria-label="Plantilla de diploma"></select>
-            <button id="selectTemplateBtn" class="primary" type="button">Usar plantilla</button>
-            <button id="deleteTemplateBtn" class="danger" type="button">Eliminar</button>
+          <div class="template-library">
+            <div class="template-controls">
+              <label>Plantilla
+                <select id="templateSelect" aria-label="Plantilla de diploma"></select>
+              </label>
+              <label>Nombre para identificarla
+                <input id="templateName" maxlength="80" placeholder="Nombre de la plantilla">
+              </label>
+              <div class="template-actions">
+                <button id="renameTemplateBtn" class="secondary" type="button">Guardar nombre</button>
+                <button id="selectTemplateBtn" class="primary" type="button">Usar plantilla</button>
+                <button id="deleteTemplateBtn" class="danger" type="button">Eliminar</button>
+              </div>
+              <small class="muted">El nombre es solo una etiqueta organizativa y no modifica el documento Word.</small>
+            </div>
+            <div class="template-preview-card">
+              <div class="template-preview-head">
+                <strong>Vista previa</strong>
+                <a id="openTemplatePreview" class="preview-link" target="_blank" rel="noopener">Abrir grande</a>
+              </div>
+              <iframe id="templatePreview" title="Previsualización de la plantilla"></iframe>
+            </div>
           </div>
           <small class="muted">La plantilla oficial está incluida y siempre estará disponible. En el alojamiento gratuito, las plantillas adicionales subidas pueden borrarse cuando el servidor se reinicie; podrás volver a subirlas desde aquí.</small>
         </article>

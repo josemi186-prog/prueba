@@ -28,6 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("DIPLOMAS_DATA_DIR", str(BASE_DIR / "data"))).resolve()
 UPLOAD_DIR = DATA_DIR / "uploads"
 GENERATED_DIR = DATA_DIR / "generated"
+TEMPLATE_PREVIEW_DIR = DATA_DIR / "template-previews"
 STATE_FILE = DATA_DIR / "state.json"
 STATIC_DIR = BASE_DIR / "static"
 DEFAULT_TEMPLATE_ID = "mainjobs-diploma-oficial"
@@ -116,6 +117,7 @@ def default_students() -> list[dict]:
 def builtin_template_record() -> dict:
     return {
         "id": DEFAULT_TEMPLATE_ID,
+        "name": "Diploma oficial Mainjobs",
         "filename": "Diploma oficial Mainjobs.docx",
         "uploaded_at": None,
         "path": str(DEFAULT_TEMPLATE_PATH),
@@ -127,6 +129,9 @@ def builtin_template_record() -> dict:
 def sync_active_template(state: dict) -> None:
     templates = [item for item in state.get("templates", []) if isinstance(item, dict)]
     builtin = builtin_template_record()
+    previous_builtin = next((item for item in templates if item.get("id") == DEFAULT_TEMPLATE_ID), None)
+    if previous_builtin and clean_value(previous_builtin.get("name")):
+        builtin["name"] = clean_value(previous_builtin["name"])
     templates = [item for item in templates if item.get("id") != DEFAULT_TEMPLATE_ID]
     templates.insert(0, builtin)
 
@@ -139,6 +144,9 @@ def sync_active_template(state: dict) -> None:
             legacy_item.setdefault("id", f"plantilla-migrada-{secrets.token_hex(4)}")
             legacy_item.setdefault("is_builtin", False)
             templates.append(legacy_item)
+
+    for item in templates:
+        item.setdefault("name", Path(str(item.get("filename") or "Plantilla")).stem)
 
     valid_ids = {item.get("id") for item in templates}
     active_id = state.get("active_template_id")
@@ -225,6 +233,7 @@ def ensure_dirs_no_state() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+    TEMPLATE_PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def save_state(state: dict) -> None:
@@ -923,6 +932,33 @@ def convert_to_pdf(docx_path: Path) -> tuple[bool, str | None, Path | None]:
     return False, " ".join(item for item in messages if item), None
 
 
+def ensure_template_preview(template: dict) -> tuple[Path | None, str | None]:
+    source = Path(str(template.get("path", "")))
+    if not source.exists() or source.suffix.lower() != ".docx":
+        return None, "El archivo Word de esta plantilla no está disponible."
+    TEMPLATE_PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    preview_base = safe_filename(str(template.get("id") or "plantilla"))
+    preview_docx = TEMPLATE_PREVIEW_DIR / f"{preview_base}.docx"
+    preview_pdf = TEMPLATE_PREVIEW_DIR / f"{preview_base}.pdf"
+    if preview_pdf.exists() and preview_pdf.stat().st_mtime >= source.stat().st_mtime:
+        return preview_pdf, None
+    if preview_pdf.exists():
+        preview_pdf.unlink()
+    shutil.copy2(source, preview_docx)
+    ok, message, converted = convert_to_pdf(preview_docx)
+    if ok and converted and converted.exists():
+        return converted, None
+    return None, message or "No se pudo crear la previsualización."
+
+
+def delete_template_preview(template_id: str) -> None:
+    preview_base = safe_filename(template_id)
+    for extension in (".docx", ".pdf"):
+        candidate = TEMPLATE_PREVIEW_DIR / f"{preview_base}{extension}"
+        if candidate.exists():
+            candidate.unlink()
+
+
 def find_libreoffice() -> str | None:
     found = shutil.which("soffice") or shutil.which("libreoffice")
     if found:
@@ -1371,6 +1407,25 @@ class DiplomaHandler(SimpleHTTPRequestHandler):
             save_state(state)
             json_response(self, {"ok": True, "state": public_state(state), "validation": validation, "available_fields": available_fields(state)})
             return
+        if parsed.path == "/api/template-preview":
+            query = parse_qs(parsed.query)
+            template_id = str(query.get("id", [""])[0]).strip()
+            template = next((item for item in state.get("templates", []) if item.get("id") == template_id), None)
+            if not template:
+                text_response(self, "Plantilla no encontrada.", 404)
+                return
+            preview_path, error = ensure_template_preview(template)
+            if not preview_path:
+                text_response(self, error or "No se pudo generar la previsualización.", 422)
+                return
+            data = preview_path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Disposition", f'inline; filename="{preview_path.name}"')
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if parsed.path == "/api/report":
             body = generation_report(state).encode("utf-8-sig")
             self.send_response(200)
@@ -1426,6 +1481,9 @@ class DiplomaHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/select-template":
                 self.select_template()
+                return
+            if parsed.path == "/api/rename-template":
+                self.rename_template()
                 return
             if parsed.path == "/api/delete-template":
                 self.delete_template()
@@ -1529,6 +1587,7 @@ class DiplomaHandler(SimpleHTTPRequestHandler):
         state = load_state()
         template = {
             "id": f"plantilla-{secrets.token_hex(8)}",
+            "name": Path(filename).stem,
             "filename": filename,
             "uploaded_at": datetime.now().isoformat(timespec="seconds"),
             "path": str(target),
@@ -1565,6 +1624,27 @@ class DiplomaHandler(SimpleHTTPRequestHandler):
         save_state(state)
         json_response(self, {"ok": True, "state": public_state(state), "available_fields": available_fields(state)})
 
+    def rename_template(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        template_id = str(payload.get("template_id", "")).strip()
+        name = clean_value(payload.get("name"))
+        if not name:
+            json_response(self, {"ok": False, "error": "Escribe un nombre para la plantilla."}, 400)
+            return
+        if len(name) > 80:
+            json_response(self, {"ok": False, "error": "El nombre no puede superar 80 caracteres."}, 400)
+            return
+        state = load_state()
+        template = next((item for item in state.get("templates", []) if item.get("id") == template_id), None)
+        if not template:
+            json_response(self, {"ok": False, "error": "La plantilla seleccionada no existe."}, 404)
+            return
+        template["name"] = name
+        sync_active_template(state)
+        save_state(state)
+        json_response(self, {"ok": True, "state": public_state(state)})
+
     def delete_template(self):
         length = int(self.headers.get("Content-Length", "0"))
         payload = json.loads(self.rfile.read(length) or b"{}")
@@ -1585,6 +1665,7 @@ class DiplomaHandler(SimpleHTTPRequestHandler):
             return
         if template_path.exists():
             template_path.unlink()
+        delete_template_preview(template_id)
         state["templates"] = [item for item in state.get("templates", []) if item.get("id") != template_id]
         if state.get("active_template_id") == template_id:
             state["active_template_id"] = DEFAULT_TEMPLATE_ID
@@ -1674,7 +1755,12 @@ class DiplomaHandler(SimpleHTTPRequestHandler):
             if UPLOAD_DIR.exists():
                 shutil.rmtree(UPLOAD_DIR)
                 UPLOAD_DIR.mkdir(exist_ok=True)
-            state["template"] = {"filename": None, "uploaded_at": None, "path": None, "detected_fields": []}
+            if TEMPLATE_PREVIEW_DIR.exists():
+                shutil.rmtree(TEMPLATE_PREVIEW_DIR)
+                TEMPLATE_PREVIEW_DIR.mkdir(exist_ok=True)
+            state["templates"] = [builtin_template_record()]
+            state["active_template_id"] = DEFAULT_TEMPLATE_ID
+            sync_active_template(state)
         validate_students(state["students"], state.get("excel", {}).get("columns", ALL_COLUMNS))
         save_state(state)
         json_response(self, {"ok": True, "state": public_state(state)})
