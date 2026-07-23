@@ -378,11 +378,59 @@ def parse_csv_file(raw: bytes) -> tuple[list[dict], list[str]]:
     return students, columns
 
 
-def parse_xlsx_file(raw: bytes) -> tuple[list[dict], list[str]]:
+def parse_xlsx_file(raw: bytes, requested_sheet: str = "") -> tuple[list[dict], list[str], str, list[dict]]:
     with zipfile.ZipFile(io.BytesIO(raw)) as archive:
         shared_strings = read_shared_strings(archive)
-        sheet_path = first_sheet_path(archive)
-        root = ET.fromstring(archive.read(sheet_path))
+        parsed_sheets = []
+        for sheet in workbook_sheets(archive):
+            raw_rows = read_xlsx_rows(archive, sheet["path"], shared_strings)
+            header_index, columns = detect_xlsx_header(raw_rows)
+            students = xlsx_rows_to_students(raw_rows, header_index, columns)
+            known_columns = sum(column in ALL_COLUMNS for column in columns)
+            required_columns = sum(column in REQUIRED_COLUMNS for column in columns)
+            parsed_sheets.append(
+                {
+                    "name": sheet["name"],
+                    "students": students,
+                    "columns": columns,
+                    "known_columns": known_columns,
+                    "required_columns": required_columns,
+                    "row_count": len(students),
+                    "valid": required_columns == len(REQUIRED_COLUMNS),
+                    "hidden": sheet.get("hidden", False),
+                }
+            )
+    summaries = [
+        {
+            "name": sheet["name"],
+            "row_count": sheet["row_count"],
+            "known_columns": sheet["known_columns"],
+            "required_columns": sheet["required_columns"],
+            "valid": sheet["valid"],
+            "hidden": sheet["hidden"],
+        }
+        for sheet in parsed_sheets
+    ]
+    selected = next((sheet for sheet in parsed_sheets if sheet["name"] == requested_sheet), None)
+    if selected is None:
+        selected = max(
+            parsed_sheets,
+            key=lambda sheet: (
+                sheet["valid"],
+                not sheet["hidden"],
+                sheet["required_columns"],
+                sheet["known_columns"],
+                sheet["row_count"],
+            ),
+            default=None,
+        )
+    if selected is None:
+        return [], [], "", summaries
+    return selected["students"], selected["columns"], selected["name"], summaries
+
+
+def read_xlsx_rows(archive: zipfile.ZipFile, sheet_path: str, shared_strings: list[str]) -> list[list[dict]]:
+    root = ET.fromstring(archive.read(sheet_path))
     ns = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
     raw_rows = []
     for row in root.findall(".//main:sheetData/main:row", ns):
@@ -397,11 +445,30 @@ def parse_xlsx_file(raw: bytes) -> tuple[list[dict], list[str]]:
             values[col_index - 1] = {"value": cell_value(cell, shared_strings, ns), "style": cell.attrib.get("s", "")}
         if max_col:
             raw_rows.append(values)
-    if not raw_rows:
-        return [], []
-    columns = [normalize_header(cell_dict(cell).get("value", "")) for cell in raw_rows[0]]
+    return raw_rows
+
+
+def detect_xlsx_header(raw_rows: list[list[dict]]) -> tuple[int, list[str]]:
+    best_index = -1
+    best_columns = []
+    best_score = (-1, -1)
+    for index, row in enumerate(raw_rows[:50]):
+        columns = [normalize_header(cell_dict(cell).get("value", "")) for cell in row]
+        required_count = sum(column in REQUIRED_COLUMNS for column in columns)
+        known_count = sum(column in ALL_COLUMNS for column in columns)
+        score = (required_count, known_count)
+        if score > best_score:
+            best_index = index
+            best_columns = columns
+            best_score = score
+    return best_index, best_columns
+
+
+def xlsx_rows_to_students(raw_rows: list[list[dict]], header_index: int, columns: list[str]) -> list[dict]:
+    if header_index < 0 or not columns:
+        return []
     students = []
-    for row_number, row in enumerate(raw_rows[1:], start=1):
+    for row_number, row in enumerate(raw_rows[header_index + 1 :], start=1):
         student = {}
         for index, column in enumerate(columns):
             if column:
@@ -413,7 +480,7 @@ def parse_xlsx_file(raw: bytes) -> tuple[list[dict], list[str]]:
             student["errors"] = []
             student["files"] = []
             students.append(student)
-    return students, columns
+    return students
 
 
 def cell_dict(cell) -> dict:
@@ -457,7 +524,7 @@ def read_shared_strings(archive: zipfile.ZipFile) -> list[str]:
     return strings
 
 
-def first_sheet_path(archive: zipfile.ZipFile) -> str:
+def workbook_sheets(archive: zipfile.ZipFile) -> list[dict]:
     workbook = ET.fromstring(archive.read("xl/workbook.xml"))
     rels = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
     ns = {
@@ -465,15 +532,25 @@ def first_sheet_path(archive: zipfile.ZipFile) -> str:
         "rel": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
         "pkg": "http://schemas.openxmlformats.org/package/2006/relationships",
     }
-    first_sheet = workbook.find(".//main:sheets/main:sheet", ns)
-    if first_sheet is None:
-        return "xl/worksheets/sheet1.xml"
-    rel_id = first_sheet.attrib.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
+    targets = {}
     for rel in rels.findall("pkg:Relationship", ns):
-        if rel.attrib.get("Id") == rel_id:
-            target = rel.attrib["Target"].lstrip("/")
-            return target if target.startswith("xl/") else f"xl/{target}"
-    return "xl/worksheets/sheet1.xml"
+        target = rel.attrib.get("Target", "").replace("\\", "/").lstrip("/")
+        if target and not target.startswith("xl/"):
+            target = f"xl/{target}"
+        targets[rel.attrib.get("Id", "")] = target
+    sheets = []
+    for index, sheet in enumerate(workbook.findall(".//main:sheets/main:sheet", ns), start=1):
+        rel_id = sheet.attrib.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id", "")
+        path = targets.get(rel_id, f"xl/worksheets/sheet{index}.xml")
+        if path in archive.namelist():
+            sheets.append(
+                {
+                    "name": clean_value(sheet.attrib.get("name")) or f"Hoja {index}",
+                    "path": path,
+                    "hidden": sheet.attrib.get("state", "visible") != "visible",
+                }
+            )
+    return sheets
 
 
 def column_index(ref: str) -> int:
@@ -1582,6 +1659,9 @@ class DiplomaHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/upload-excel":
                 self.upload_excel()
                 return
+            if parsed.path == "/api/select-excel-sheet":
+                self.select_excel_sheet()
+                return
             if parsed.path == "/api/upload-template":
                 self.upload_template()
                 return
@@ -1663,7 +1743,7 @@ class DiplomaHandler(SimpleHTTPRequestHandler):
         if extension == ".csv":
             students, columns = parse_csv_file(raw)
         elif extension == ".xlsx":
-            students, columns = parse_xlsx_file(raw)
+            students, columns, sheet_name, sheets = parse_xlsx_file(raw)
         else:
             json_response(self, {"ok": False, "error": "El archivo debe ser .xlsx o .csv."}, 400)
             return
@@ -1671,11 +1751,44 @@ class DiplomaHandler(SimpleHTTPRequestHandler):
         target.write_bytes(raw)
         state = load_state()
         state["students"] = students
-        state["excel"] = {"filename": filename, "uploaded_at": datetime.now().isoformat(timespec="seconds"), "columns": columns, "path": str(target)}
+        state["excel"] = {
+            "filename": filename,
+            "uploaded_at": datetime.now().isoformat(timespec="seconds"),
+            "columns": columns,
+            "path": str(target),
+            "sheet_name": sheet_name if extension == ".xlsx" else "",
+            "sheets": sheets if extension == ".xlsx" else [],
+        }
         reset_generated_outputs(state)
         validation = validate_students(state["students"], columns)
         save_state(state)
         json_response(self, {"ok": True, "state": public_state(state), "validation": validation, "available_fields": available_fields(state)})
+
+    def select_excel_sheet(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        sheet_name = clean_value(payload.get("sheet_name"))
+        state = load_state()
+        excel = state.get("excel") or {}
+        source = Path(str(excel.get("path", "")))
+        if source.suffix.lower() != ".xlsx" or not source.exists():
+            json_response(self, {"ok": False, "error": "El Excel original ya no está disponible. Vuelve a subirlo."}, 400)
+            return
+        students, columns, selected_name, sheets = parse_xlsx_file(source.read_bytes(), sheet_name)
+        if selected_name != sheet_name:
+            json_response(self, {"ok": False, "error": "La hoja seleccionada no existe en este Excel."}, 404)
+            return
+        state["students"] = students
+        excel["columns"] = columns
+        excel["sheet_name"] = selected_name
+        excel["sheets"] = sheets
+        reset_generated_outputs(state)
+        validation = validate_students(state["students"], columns)
+        save_state(state)
+        json_response(
+            self,
+            {"ok": True, "state": public_state(state), "validation": validation, "available_fields": available_fields(state)},
+        )
 
     def upload_template(self):
         parts = parse_multipart(self)
