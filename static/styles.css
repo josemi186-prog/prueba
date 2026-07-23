@@ -253,6 +253,26 @@ td.truncate { max-width: 260px; white-space: nowrap; overflow: hidden; text-over
 }
 .file-check input { width: auto; }
 .danger { border-color: #fecdca; }
+.panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.panel-heading h3,
+.panel-heading p { margin-top: 0; }
+.template-picker {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  margin: 18px 0 12px;
+}
+.template-picker select { min-width: 0; }
+button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
 .checkbox { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: 8px; font-weight: 600; }
 .checkbox input { width: auto; }
 dialog {
@@ -305,4 +325,5 @@ menu { display: flex; justify-content: flex-end; gap: 10px; padding: 0; margin: 
   .workspace { padding: 16px; }
   .summary-grid, .summary-grid.compact { grid-template-columns: 1fr; }
   .dialog-grid { grid-template-columns: 1fr; }
+  .template-picker { grid-template-columns: 1fr; }
 }

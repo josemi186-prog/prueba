@@ -30,6 +30,8 @@ UPLOAD_DIR = DATA_DIR / "uploads"
 GENERATED_DIR = DATA_DIR / "generated"
 STATE_FILE = DATA_DIR / "state.json"
 STATIC_DIR = BASE_DIR / "static"
+DEFAULT_TEMPLATE_ID = "mainjobs-diploma-oficial"
+DEFAULT_TEMPLATE_PATH = BASE_DIR / "DIPLOMA_VERSION_FINAL_CORREGIDA.docx"
 
 REQUIRED_COLUMNS = [
     "NOMBRE",
@@ -111,11 +113,56 @@ def default_students() -> list[dict]:
     ]
 
 
+def builtin_template_record() -> dict:
+    return {
+        "id": DEFAULT_TEMPLATE_ID,
+        "filename": "Diploma oficial Mainjobs.docx",
+        "uploaded_at": None,
+        "path": str(DEFAULT_TEMPLATE_PATH),
+        "detected_fields": REQUIRED_COLUMNS.copy(),
+        "is_builtin": True,
+    }
+
+
+def sync_active_template(state: dict) -> None:
+    templates = [item for item in state.get("templates", []) if isinstance(item, dict)]
+    builtin = builtin_template_record()
+    templates = [item for item in templates if item.get("id") != DEFAULT_TEMPLATE_ID]
+    templates.insert(0, builtin)
+
+    legacy = state.get("template")
+    if isinstance(legacy, dict) and legacy.get("path"):
+        legacy_path = str(legacy.get("path"))
+        known_paths = {str(item.get("path")) for item in templates}
+        if legacy_path not in known_paths:
+            legacy_item = dict(legacy)
+            legacy_item.setdefault("id", f"plantilla-migrada-{secrets.token_hex(4)}")
+            legacy_item.setdefault("is_builtin", False)
+            templates.append(legacy_item)
+
+    valid_ids = {item.get("id") for item in templates}
+    active_id = state.get("active_template_id")
+    if active_id not in valid_ids:
+        legacy_path = str(legacy.get("path")) if isinstance(legacy, dict) else ""
+        active_id = next(
+            (item.get("id") for item in templates if str(item.get("path")) == legacy_path),
+            DEFAULT_TEMPLATE_ID,
+        )
+
+    active = next((item for item in templates if item.get("id") == active_id), builtin)
+    state["templates"] = templates
+    state["active_template_id"] = active.get("id")
+    state["template"] = dict(active)
+
+
 def default_state() -> dict:
+    builtin = builtin_template_record()
     return {
         "students": default_students(),
         "excel": {"filename": "Datos de ejemplo", "uploaded_at": None, "columns": ALL_COLUMNS},
-        "template": {"filename": None, "uploaded_at": None, "path": None, "detected_fields": []},
+        "templates": [builtin],
+        "active_template_id": DEFAULT_TEMPLATE_ID,
+        "template": dict(builtin),
         "history": [],
         "email_history": [],
         "settings": {
@@ -171,6 +218,7 @@ def migrate_state(state: dict) -> None:
         state["settings"]["smtp"].setdefault(key, value)
     for key, value in defaults["settings"]["email_template"].items():
         state["settings"]["email_template"].setdefault(key, value)
+    sync_active_template(state)
 
 
 def ensure_dirs_no_state() -> None:
@@ -1376,6 +1424,12 @@ class DiplomaHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/upload-template":
                 self.upload_template()
                 return
+            if parsed.path == "/api/select-template":
+                self.select_template()
+                return
+            if parsed.path == "/api/delete-template":
+                self.delete_template()
+                return
             if parsed.path == "/api/upload-email-attachment":
                 self.upload_email_attachment()
                 return
@@ -1469,12 +1523,73 @@ class DiplomaHandler(SimpleHTTPRequestHandler):
         if Path(filename).suffix.lower() != ".docx":
             json_response(self, {"ok": False, "error": "La plantilla debe ser un archivo .docx."}, 400)
             return
-        target = UPLOAD_DIR / f"plantilla_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe_filename(filename)}"
+        target = UPLOAD_DIR / f"plantilla_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{safe_filename(filename)}"
         target.write_bytes(file["data"])
         fields = detect_docx_fields(target)
         state = load_state()
-        state["template"] = {"filename": filename, "uploaded_at": datetime.now().isoformat(timespec="seconds"), "path": str(target), "detected_fields": fields}
+        template = {
+            "id": f"plantilla-{secrets.token_hex(8)}",
+            "filename": filename,
+            "uploaded_at": datetime.now().isoformat(timespec="seconds"),
+            "path": str(target),
+            "detected_fields": fields,
+            "is_builtin": False,
+        }
+        state.setdefault("templates", []).append(template)
+        state["active_template_id"] = template["id"]
+        sync_active_template(state)
         reset_generated_outputs(state)
+        save_state(state)
+        json_response(self, {"ok": True, "state": public_state(state), "available_fields": available_fields(state)})
+
+    def select_template(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        template_id = str(payload.get("template_id", "")).strip()
+        state = load_state()
+        template = next((item for item in state.get("templates", []) if item.get("id") == template_id), None)
+        if not template:
+            json_response(self, {"ok": False, "error": "La plantilla seleccionada no existe."}, 404)
+            return
+        template_path = Path(str(template.get("path", "")))
+        if not template_path.exists():
+            json_response(
+                self,
+                {"ok": False, "error": "El archivo de esta plantilla ya no está disponible. Vuelve a subirla."},
+                400,
+            )
+            return
+        state["active_template_id"] = template_id
+        sync_active_template(state)
+        reset_generated_outputs(state)
+        save_state(state)
+        json_response(self, {"ok": True, "state": public_state(state), "available_fields": available_fields(state)})
+
+    def delete_template(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        template_id = str(payload.get("template_id", "")).strip()
+        if template_id == DEFAULT_TEMPLATE_ID:
+            json_response(self, {"ok": False, "error": "La plantilla oficial incluida no se puede eliminar."}, 400)
+            return
+        state = load_state()
+        template = next((item for item in state.get("templates", []) if item.get("id") == template_id), None)
+        if not template:
+            json_response(self, {"ok": False, "error": "La plantilla seleccionada no existe."}, 404)
+            return
+        template_path = Path(str(template.get("path", ""))).resolve()
+        try:
+            template_path.relative_to(UPLOAD_DIR.resolve())
+        except ValueError:
+            json_response(self, {"ok": False, "error": "No se puede borrar este archivo protegido."}, 400)
+            return
+        if template_path.exists():
+            template_path.unlink()
+        state["templates"] = [item for item in state.get("templates", []) if item.get("id") != template_id]
+        if state.get("active_template_id") == template_id:
+            state["active_template_id"] = DEFAULT_TEMPLATE_ID
+            reset_generated_outputs(state)
+        sync_active_template(state)
         save_state(state)
         json_response(self, {"ok": True, "state": public_state(state), "available_fields": available_fields(state)})
 

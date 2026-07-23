@@ -49,6 +49,9 @@ function bindEvents() {
   document.getElementById('logoutBtn').addEventListener('click', logout);
   document.getElementById('excelForm').addEventListener('submit', event => uploadForm(event, '/api/upload-excel'));
   document.getElementById('templateForm').addEventListener('submit', event => uploadForm(event, '/api/upload-template'));
+  document.getElementById('templateSelect').addEventListener('change', updateTemplateActions);
+  document.getElementById('selectTemplateBtn').addEventListener('click', selectTemplate);
+  document.getElementById('deleteTemplateBtn').addEventListener('click', deleteTemplate);
   ['searchInput', 'statusFilter', 'activityFilter', 'specialtyFilter', 'locationFilter', 'dateFilter'].forEach(id => {
     document.getElementById(id).addEventListener('input', renderStudents);
   });
@@ -302,6 +305,56 @@ function renderSelectionInfo() {
 function renderTemplate() {
   const detected = state.data.template?.detected_fields || [];
   document.getElementById('detectedFields').innerHTML = detected.map(field => chip(`«${field}»`)).join('') || '<p class="muted">Sube una plantilla para detectar campos.</p>';
+  const templates = state.data.templates || (state.data.template ? [state.data.template] : []);
+  const activeId = state.data.active_template_id || state.data.template?.id || '';
+  const select = document.getElementById('templateSelect');
+  select.innerHTML = templates.map(template => {
+    const label = `${template.filename || 'Plantilla sin nombre'}${template.is_builtin ? ' · incluida' : ''}`;
+    return `<option value="${escapeAttr(template.id || '')}" ${template.id === activeId ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+  }).join('');
+  const active = templates.find(template => template.id === activeId) || state.data.template || {};
+  document.getElementById('activeTemplateInfo').textContent = active.filename
+    ? `Plantilla activa: ${active.filename}`
+    : 'No hay ninguna plantilla activa.';
+  document.getElementById('activeTemplateBadge').textContent = active.is_builtin ? 'Oficial activa' : 'Activa';
+  updateTemplateActions();
+}
+
+function updateTemplateActions() {
+  const templateId = document.getElementById('templateSelect').value;
+  const template = (state.data?.templates || []).find(item => item.id === templateId);
+  document.getElementById('selectTemplateBtn').disabled = !template || templateId === state.data.active_template_id;
+  document.getElementById('deleteTemplateBtn').disabled = !template || Boolean(template.is_builtin);
+}
+
+async function selectTemplate() {
+  const templateId = document.getElementById('templateSelect').value;
+  if (!templateId) return toast('Selecciona una plantilla.');
+  const result = await api('/api/select-template', {
+    method: 'POST',
+    body: JSON.stringify({ template_id: templateId }),
+  });
+  if (!result.ok) return toast(result.error || 'No se pudo seleccionar la plantilla.');
+  state.data = result.state;
+  state.availableFields = result.available_fields || state.availableFields;
+  renderAll();
+  toast('Plantilla seleccionada.');
+}
+
+async function deleteTemplate() {
+  const templateId = document.getElementById('templateSelect').value;
+  const template = (state.data.templates || []).find(item => item.id === templateId);
+  if (!template || template.is_builtin) return;
+  if (!confirm(`¿Eliminar la plantilla "${template.filename}"?`)) return;
+  const result = await api('/api/delete-template', {
+    method: 'POST',
+    body: JSON.stringify({ template_id: templateId }),
+  });
+  if (!result.ok) return toast(result.error || 'No se pudo eliminar la plantilla.');
+  state.data = result.state;
+  state.availableFields = result.available_fields || state.availableFields;
+  renderAll();
+  toast('Plantilla eliminada.');
 }
 
 function renderPreviewOptions() {

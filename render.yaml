@@ -2,7 +2,7 @@ services:
   - type: web
     name: mainjobs-generador-diplomas
     runtime: docker
-    plan: starter
+    plan: free
     region: frankfurt
     healthCheckPath: /api/health
     autoDeployTrigger: commit
@@ -21,7 +21,3 @@ services:
         value: usuario
       - key: USER_PASSWORD
         generateValue: true
-    disk:
-      name: mainjobs-diplomas-data
-      mountPath: /app/data
-      sizeGB: 5

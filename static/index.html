@@ -137,11 +137,26 @@
 
       <section id="template" class="view">
         <article class="panel">
-          <h3>Subir plantilla Word</h3>
+          <div class="panel-heading">
+            <div>
+              <h3>Plantillas disponibles</h3>
+              <p id="activeTemplateInfo">Selecciona el diseño que se utilizará para los próximos diplomas.</p>
+            </div>
+            <span class="status generado" id="activeTemplateBadge">Activa</span>
+          </div>
+          <div class="template-picker">
+            <select id="templateSelect" aria-label="Plantilla de diploma"></select>
+            <button id="selectTemplateBtn" class="primary" type="button">Usar plantilla</button>
+            <button id="deleteTemplateBtn" class="danger" type="button">Eliminar</button>
+          </div>
+          <small class="muted">La plantilla oficial está incluida y siempre estará disponible. En el alojamiento gratuito, las plantillas adicionales subidas pueden borrarse cuando el servidor se reinicie; podrás volver a subirlas desde aquí.</small>
+        </article>
+        <article class="panel">
+          <h3>Añadir otra plantilla Word</h3>
           <p>La plantilla puede usar campos como «NOMBRE» o {{NOMBRE}}. El campo CONTENIDO admite textos largos y saltos de línea.</p>
           <form id="templateForm" class="upload-row">
             <input type="file" name="file" accept=".docx" required>
-            <button class="primary" type="submit">Subir plantilla</button>
+            <button class="primary" type="submit">Subir y utilizar</button>
           </form>
         </article>
         <div class="two-col">
