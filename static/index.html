@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mainjobs Generador de Diplomas</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main id="login" class="login-shell hidden">
+    <section class="login-panel">
+      <p class="eyebrow">Aplicación privada</p>
+      <h1>Mainjobs Generador de Diplomas</h1>
+      <p class="muted">Accede para generar certificados personalizados desde Excel y Word.</p>
+      <form id="loginForm" class="stack">
+        <label>Usuario<input name="username" autocomplete="username" value="admin"></label>
+        <label>Contraseña<input name="password" type="password" autocomplete="current-password" value="admin123"></label>
+        <button class="primary" type="submit">Entrar</button>
+        <p class="hint">Demo: admin/admin123 o usuario/usuario123</p>
+        <p id="loginError" class="error-text"></p>
+      </form>
+      <p class="privacy">Los datos personales y certificados quedan protegidos detrás del login y no se publican.</p>
+    </section>
+  </main>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">MJ</span>
+        <div>
+          <strong>Mainjobs Generador de Diplomas</strong>
+          <small id="userRole">Privado</small>
+        </div>
+      </div>
+      <nav>
+        <button data-view="dashboard" class="active">Inicio</button>
+        <button data-view="excel">Subir Excel</button>
+        <button data-view="students">Alumnos</button>
+        <button data-view="template">Plantilla</button>
+        <button data-view="generate">Generar</button>
+        <button data-view="downloads">Descargas</button>
+        <button data-view="email">Email</button>
+        <button data-view="history">Historial</button>
+        <button data-view="settings">Ajustes</button>
+      </nav>
+      <button id="logoutBtn" class="ghost">Cerrar sesión</button>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="sectionEyebrow">Inicio</p>
+          <h2 id="sectionTitle">Resumen general</h2>
+        </div>
+        <button id="newRunBtn" class="primary">Empezar nueva generación</button>
+      </header>
+
+      <section id="dashboard" class="view active">
+        <div class="summary-grid" id="summaryCards"></div>
+        <div class="two-col">
+          <article class="panel">
+            <h3>Flujo paso a paso</h3>
+            <ol class="steps">
+              <li><span>1</span><div><strong>Sube el Excel</strong><small>Se validan columnas, duplicados y filas incompletas.</small></div></li>
+              <li><span>2</span><div><strong>Sube la plantilla Word</strong><small>Acepta «CAMPO» y {{CAMPO}}.</small></div></li>
+              <li><span>3</span><div><strong>Revisa alumnos</strong><small>Edita datos, filtra y selecciona registros.</small></div></li>
+              <li><span>4</span><div><strong>Genera y descarga</strong><small>DOCX funcional, PDF preparado con LibreOffice.</small></div></li>
+            </ol>
+          </article>
+          <article class="panel">
+            <h3>Aviso de protección de datos</h3>
+            <p>Esta aplicación trabaja con datos personales. Mantén el acceso privado, borra archivos temporales cuando termines y conserva solo los certificados necesarios.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="excel" class="view">
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>Subir Excel o CSV</h3>
+              <p>Columnas obligatorias: NOMBRE, APELLIDOS, DNI, FECHA, ACTIVIDAD, CONTENIDO, ESPECIALIDAD y HORAS.</p>
+            </div>
+          </div>
+          <form id="excelForm" class="upload-row">
+            <input type="file" name="file" accept=".xlsx,.csv" required>
+            <button class="primary" type="submit">Subir y validar</button>
+          </form>
+        </article>
+        <div class="summary-grid compact" id="validationCards"></div>
+        <article class="panel">
+          <h3>Campos disponibles para la plantilla</h3>
+          <div class="chips" id="availableFields"></div>
+        </article>
+      </section>
+
+      <section id="students" class="view">
+        <article class="panel">
+          <div class="filters">
+            <input id="searchInput" placeholder="Buscar por nombre, DNI, actividad o especialidad">
+            <select id="statusFilter">
+              <option value="all">Todos los estados</option>
+              <option value="generado">Generados</option>
+              <option value="pendiente">Pendientes</option>
+              <option value="error">Errores</option>
+            </select>
+            <select id="activityFilter"><option value="all">Todas las actividades</option></select>
+            <select id="specialtyFilter"><option value="all">Todas las especialidades</option></select>
+            <select id="locationFilter"><option value="all">Todas las ubicaciones</option></select>
+            <select id="dateFilter"><option value="all">Todas las fechas</option></select>
+          </div>
+          <div class="table-actions">
+            <button id="selectVisibleBtn" class="secondary">Seleccionar visibles</button>
+            <button id="clearSelectionBtn" class="secondary">Limpiar selección</button>
+            <select id="studentsFormatSelect" class="inline-select">
+              <option value="docx">Word .docx</option>
+              <option value="pdf">PDF</option>
+              <option value="both">Word + PDF</option>
+            </select>
+            <button id="generateSelectedStudentsBtn" class="primary">Generar seleccionados</button>
+            <button id="generateVisibleStudentsBtn" class="secondary">Generar visibles</button>
+            <span id="selectionInfo" class="muted"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><input id="selectAll" type="checkbox"></th>
+                  <th>UBICACIÓN</th><th>NOMBRE</th><th>APELLIDOS</th><th>DNI</th><th>FECHA</th><th>ACTIVIDAD</th><th>CONTENIDO</th><th>ESPECIALIDAD</th><th>HORAS</th><th>ESTADO</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="studentsBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section id="template" class="view">
+        <article class="panel">
+          <h3>Subir plantilla Word</h3>
+          <p>La plantilla puede usar campos como «NOMBRE» o {{NOMBRE}}. El campo CONTENIDO admite textos largos y saltos de línea.</p>
+          <form id="templateForm" class="upload-row">
+            <input type="file" name="file" accept=".docx" required>
+            <button class="primary" type="submit">Subir plantilla</button>
+          </form>
+        </article>
+        <div class="two-col">
+          <article class="panel">
+            <h3>Campos detectados</h3>
+            <div id="detectedFields" class="chips"></div>
+          </article>
+          <article class="panel">
+            <h3>Campos disponibles</h3>
+            <div id="templateAvailableFields" class="chips"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="generate" class="view">
+        <div class="two-col">
+          <article class="panel">
+            <h3>Elegir generación</h3>
+            <div class="stack">
+              <label>Alumnos
+                <select id="generationScope">
+                  <option value="selected">Alumnos seleccionados</option>
+                  <option value="visible">Todos los visibles con filtros</option>
+                  <option value="valid">Todos los alumnos correctos</option>
+                </select>
+              </label>
+              <p id="generationScopeHint" class="hint">La selección se hace en la pantalla Alumnos. También puedes generar directamente desde allí.</p>
+              <label>Formato
+                <select id="formatSelect">
+                  <option value="docx">Word .docx</option>
+                  <option value="pdf">PDF</option>
+                  <option value="both">Word + PDF</option>
+                </select>
+              </label>
+              <button id="generateBtn" class="primary">Generar certificados</button>
+              <div class="progress"><span id="progressBar"></span></div>
+              <p id="generationResult" class="muted"></p>
+            </div>
+          </article>
+          <article class="panel">
+            <h3>Previsualización</h3>
+            <select id="previewStudent"></select>
+            <div id="previewBox" class="preview"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="downloads" class="view">
+        <article class="panel">
+          <div class="download-actions">
+            <button data-zip="selected" class="secondary">Descargar seleccionados ZIP</button>
+            <button data-zip="all" class="secondary">Descargar todos ZIP</button>
+            <button data-kind="docx" class="secondary">Solo Word</button>
+            <button data-kind="pdf" class="secondary">Solo PDF</button>
+            <button id="convertPdfsBtn" class="primary">Convertir Word a PDF</button>
+            <a class="secondary link-button" href="/api/report">Descargar informe CSV</a>
+            <button id="clearDownloadsBtn" class="secondary danger-button">Limpiar lista</button>
+          </div>
+          <pre id="pdfHelpBox" class="help-box hidden"></pre>
+          <div id="downloadList" class="file-list"></div>
+        </article>
+      </section>
+
+      <section id="email" class="view">
+        <div class="two-col">
+          <article class="panel">
+            <h3>Servidor de email</h3>
+            <div class="stack">
+              <label>Servidor SMTP<input id="smtpHost" placeholder="smtp.tudominio.com"></label>
+              <label>Puerto<input id="smtpPort" placeholder="587"></label>
+              <label>Seguridad
+                <select id="smtpSecurity">
+                  <option value="starttls">STARTTLS</option>
+                  <option value="ssl">SSL/TLS</option>
+                  <option value="none">Sin cifrado</option>
+                </select>
+              </label>
+              <label>Usuario SMTP<input id="smtpUsername" autocomplete="username"></label>
+              <label>Contraseña SMTP<input id="smtpPassword" type="password" autocomplete="new-password" placeholder="Dejar en blanco para conservar"></label>
+              <label>Email remitente<input id="smtpFromEmail" placeholder="tu@email.com"></label>
+              <label>Nombre remitente<input id="smtpFromName" placeholder="Nombre o entidad"></label>
+              <button id="saveEmailSettingsBtn" class="primary">Guardar configuración</button>
+            </div>
+          </article>
+          <article class="panel">
+            <h3>Mensaje</h3>
+            <div class="stack">
+              <label>Asunto<input id="emailSubject"></label>
+              <label>Cuerpo<textarea id="emailBody"></textarea></label>
+              <p class="hint">Puedes usar campos como {{NOMBRE}}, {{APELLIDOS}}, {{ACTIVIDAD}}, {{FECHA}}, {{ESPECIALIDAD}} o {{HORAS}}.</p>
+              <label>Adjunto PDF
+                <select id="emailAttachmentMode">
+                  <option value="generated">PDF generado de cada alumno</option>
+                  <option value="manual">PDF subido manualmente</option>
+                </select>
+              </label>
+              <form id="emailAttachmentForm" class="upload-row">
+                <input type="file" name="file" accept=".pdf">
+                <button class="secondary" type="submit">Subir PDF adjunto</button>
+              </form>
+              <p id="emailAttachmentInfo" class="hint"></p>
+              <p id="emailResult" class="muted"></p>
+            </div>
+          </article>
+        </div>
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>Envío manual</h3>
+              <p>Escribe uno o varios emails para enviar el diploma fuera del listado de alumnos.</p>
+            </div>
+            <button id="sendManualEmailBtn" class="primary">Enviar manual</button>
+          </div>
+          <div class="two-col">
+            <label>Emails manuales
+              <textarea id="manualEmails" placeholder="correo1@ejemplo.com&#10;correo2@ejemplo.com"></textarea>
+            </label>
+            <div class="stack">
+              <label>Asunto manual<input id="manualEmailSubject" value="Diploma de aprovechamiento"></label>
+              <label>Cuerpo manual<textarea id="manualEmailBody">Buenos días,
+
+Te hacemos llegar el diploma de aprovechamiento adjunto.
+
+Un cordial saludo</textarea></label>
+              <label>Adjunto manual
+                <select id="manualAttachmentMode">
+                  <option value="none">Sin adjunto</option>
+                  <option value="manual">PDF subido en envío manual</option>
+                  <option value="generated">PDF generado del alumno asociado</option>
+                </select>
+              </label>
+              <form id="manualAttachmentForm" class="upload-row">
+                <input type="file" name="file" accept=".pdf">
+                <button class="secondary" type="submit">Subir PDF manual</button>
+              </form>
+              <p id="manualAttachmentInfo" class="hint"></p>
+              <label>Usar datos de alumno para sustituir campos
+                <select id="manualEmailStudent"></select>
+              </label>
+              <p class="hint">Este envío tiene su propio asunto, cuerpo y PDF. Si usas {{ACTIVIDAD}} o {{FECHA}}, se rellenan con el alumno asociado.</p>
+              <p id="manualEmailResult" class="muted"></p>
+            </div>
+          </div>
+        </article>
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>Destinatarios</h3>
+              <p>Filtra, revisa email y PDF disponible, y selecciona a quién enviar.</p>
+            </div>
+            <button id="sendEmailBtn" class="primary">Enviar a seleccionados</button>
+          </div>
+          <div class="filters">
+            <input id="emailSearchInput" placeholder="Buscar por nombre, DNI, email, actividad o especialidad">
+            <select id="emailActivityFilter"><option value="all">Todas las actividades</option></select>
+            <select id="emailSpecialtyFilter"><option value="all">Todas las especialidades</option></select>
+            <select id="emailLocationFilter"><option value="all">Todas las ubicaciones</option></select>
+            <select id="emailDateFilter"><option value="all">Todas las fechas</option></select>
+            <select id="emailStatusFilter">
+              <option value="all">Todos los envíos</option>
+              <option value="enviado">Enviados</option>
+              <option value="pendiente">Pendientes</option>
+              <option value="error">Con error</option>
+            </select>
+            <select id="emailPdfFilter">
+              <option value="all">Todos los PDF</option>
+              <option value="with">Con PDF generado</option>
+              <option value="without">Sin PDF generado</option>
+            </select>
+          </div>
+          <div class="table-actions">
+            <button id="selectVisibleEmailBtn" class="secondary">Seleccionar visibles</button>
+            <button id="clearEmailSelectionBtn" class="secondary">Limpiar selección</button>
+            <span id="emailSelectionInfo" class="muted"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th><input id="selectAllEmail" type="checkbox"></th><th>Alumno</th><th>DNI</th><th>Email</th><th>Fecha</th><th>Actividad</th><th>Especialidad</th><th>PDF</th><th>Envío</th></tr>
+              </thead>
+              <tbody id="emailStudentsBody"></tbody>
+            </table>
+          </div>
+        </article>
+        <article class="panel">
+          <h3>Historial de emails</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Fecha</th><th>Usuario</th><th>Alumno</th><th>Email</th><th>Actividad</th><th>Estado</th><th>Archivo/Error</th></tr></thead>
+              <tbody id="emailHistoryBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section id="history" class="view">
+        <article class="panel">
+          <h3>Historial de generación</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Fecha</th><th>Usuario</th><th>Alumno</th><th>DNI</th><th>Actividad</th><th>Formato</th><th>Estado</th><th>Archivo</th></tr></thead>
+              <tbody id="historyBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section id="settings" class="view">
+        <div class="two-col">
+          <article class="panel">
+            <h3>Ajustes</h3>
+            <div class="stack">
+              <label>Nombre base de archivos<input id="filenameBase" value="Certificado"></label>
+              <label class="checkbox"><input id="keepCertificates" type="checkbox" checked> Conservar certificados generados</label>
+              <button id="saveSettingsBtn" class="primary">Guardar ajustes</button>
+            </div>
+          </article>
+          <article class="panel danger">
+            <h3>Limpieza de datos</h3>
+            <div class="download-actions">
+              <button data-clear="temporary" class="secondary">Borrar archivos temporales</button>
+              <button data-clear="excel" class="secondary">Borrar Excel cargado</button>
+              <button data-clear="generated" class="secondary">Borrar certificados generados</button>
+              <button data-clear="all" class="secondary">Borrar todo</button>
+            </div>
+          </article>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <dialog id="studentDialog">
+    <form method="dialog" class="dialog-body">
+      <h3>Detalle del alumno</h3>
+      <div id="dialogFields" class="dialog-grid"></div>
+      <menu>
+        <button value="cancel" class="secondary">Cancelar</button>
+        <button id="saveStudentBtn" value="default" class="primary">Guardar</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
