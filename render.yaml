@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: mainjobs-generador-diplomas
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DIPLOMAS_DATA_DIR
+        value: /app/data
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: USER_USERNAME
+        value: usuario
+      - key: USER_PASSWORD
+        sync: false
