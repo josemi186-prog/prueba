@@ -210,6 +210,7 @@ def load_state() -> dict:
     with STATE_FILE.open("r", encoding="utf-8") as fh:
         state = json.load(fh)
     migrate_state(state)
+    reconcile_generated_outputs(state)
     return state
 
 
@@ -264,6 +265,91 @@ def reset_generated_outputs(state: dict) -> None:
     if GENERATED_DIR.exists():
         shutil.rmtree(GENERATED_DIR)
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def reconcile_generated_outputs(state: dict) -> None:
+    """Keep student status, downloads and history aligned with files on disk."""
+    generated_files = []
+    if GENERATED_DIR.exists():
+        generated_files = [
+            path
+            for path in GENERATED_DIR.rglob("*")
+            if path.is_file() and path.suffix.lower() in {".docx", ".pdf"}
+        ]
+    base = state.get("settings", {}).get("filename_base", "Certificado")
+    history = state.setdefault("history", [])
+    history_filenames = {
+        name.strip()
+        for item in history
+        for name in str(item.get("filename", "")).split(",")
+        if name.strip()
+    }
+
+    for student in state.get("students", []):
+        valid_files = []
+        seen_paths = set()
+        for file in student.get("files", []):
+            path = Path(str(file.get("path", "")))
+            try:
+                resolved = str(path.resolve())
+            except OSError:
+                continue
+            if (
+                resolved not in seen_paths
+                and path.exists()
+                and path.suffix.lower() in {".docx", ".pdf"}
+                and is_safe_generated_path(path)
+            ):
+                valid_files.append(
+                    {"type": path.suffix.lower().lstrip("."), "name": path.name, "path": str(path)}
+                )
+                seen_paths.add(resolved)
+
+        if not valid_files:
+            expected_stems = {
+                Path(make_certificate_name(student, extension, base)).stem.casefold()
+                for extension in ("docx", "pdf")
+            }
+            candidates = []
+            for path in generated_files:
+                stem = path.stem.casefold()
+                if any(stem == expected or re.fullmatch(re.escape(expected) + r"_\d+", stem) for expected in expected_stems):
+                    candidates.append(path)
+            newest_by_type = {}
+            for path in sorted(candidates, key=lambda item: item.stat().st_mtime, reverse=True):
+                newest_by_type.setdefault(path.suffix.lower(), path)
+            valid_files = [
+                {"type": path.suffix.lower().lstrip("."), "name": path.name, "path": str(path)}
+                for path in newest_by_type.values()
+            ]
+
+        student["files"] = valid_files
+        if valid_files:
+            student["cert_status"] = "generado"
+            student["last_error"] = ""
+            missing_history = [file for file in valid_files if file["name"] not in history_filenames]
+            if missing_history:
+                newest = max((Path(file["path"]) for file in missing_history), key=lambda path: path.stat().st_mtime)
+                timestamp = datetime.fromtimestamp(newest.stat().st_mtime).isoformat(timespec="seconds")
+                filename = ", ".join(file["name"] for file in valid_files)
+                history.insert(
+                    0,
+                    {
+                        "date": timestamp,
+                        "user": "Sistema (recuperado)",
+                        "student": f"{student.get('NOMBRE', '')} {student.get('APELLIDOS', '')}".strip(),
+                        "dni": student.get("DNI", ""),
+                        "activity": student.get("ACTIVIDAD", ""),
+                        "specialty": student.get("ESPECIALIDAD", ""),
+                        "format": "+".join(sorted(file["type"].upper() for file in valid_files)),
+                        "status": "generado",
+                        "message": "Registro recuperado desde los archivos generados.",
+                        "filename": filename,
+                    },
+                )
+                history_filenames.update(file["name"] for file in valid_files)
+        elif student.get("cert_status") == "generado":
+            student["cert_status"] = "pendiente"
 
 
 def json_response(handler, payload: dict, status: int = 200) -> None:
