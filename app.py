@@ -192,7 +192,10 @@ def default_state() -> dict:
                     "Buenos días,\n\n"
                     "Te escribimos desde Mainjobs, la empresa que gestiona las actividades de la Agencia para el Empleo, "
                     "para hacerte llegar el diploma de aprovechamiento correspondiente a la actividad {{ACTIVIDAD}} "
-                    "en la que participaste el día {{FECHA}}.\n\n"
+                    "en la que participaste el día {{FECHA}}.\n"
+                    "Aprovechamos para agradecerte tu participación y agradeceríamos mucho que nos dejaras "
+                    "una reseña en Google a través del siguiente enlace:\n\n"
+                    "https://www.google.com/maps/place//data=!4m3!3m2!1s0xd1269689be55555:0x57a3b807299fe00!12e1?source=g.page.m._&laa=merchant-review-solicitation\n\n"
                     "Un cordial saludo"
                 ),
             },
