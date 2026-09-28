@@ -165,11 +165,14 @@ async function uploadForm(event, endpoint) {
   toast('Archivo cargado correctamente.');
 }
 
-function switchView(view) {
+async function switchView(view) {
   document.querySelectorAll('.view').forEach(node => node.classList.toggle('active', node.id === view));
   document.querySelectorAll('nav button').forEach(node => node.classList.toggle('active', node.dataset.view === view));
   document.getElementById('sectionEyebrow').textContent = views[view][0];
   document.getElementById('sectionTitle').textContent = views[view][1];
+  if (['students', 'downloads', 'email', 'history'].includes(view)) {
+    await refreshState();
+  }
 }
 
 function renderAll() {
