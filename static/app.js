@@ -838,6 +838,13 @@ async function api(url, options = {}) {
   if (!options.raw) fetchOptions.headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   delete fetchOptions.raw;
   const response = await fetch(url, fetchOptions);
+  if (response.status === 401 && state.user && url !== '/api/login') {
+    state.user = null;
+    showLogin();
+    const message = 'Tu sesión ya no es válida. El servidor puede haberse reiniciado. Inicia sesión de nuevo; no se repetirá ningún envío automáticamente.';
+    document.getElementById('loginError').textContent = message;
+    return { ok: false, error: message };
+  }
   const text = await response.text();
   try {
     const data = text ? JSON.parse(text) : {};
