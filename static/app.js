@@ -229,7 +229,7 @@ function renderExcelSheets() {
   select.innerHTML = sheets.map(sheet => {
     const status = sheet.valid
       ? `${sheet.row_count} alumno(s), columnas correctas`
-      : `${sheet.row_count} fila(s), ${sheet.required_columns}/${REQUIRED_FIELDS.length} columnas obligatorias`;
+      : `${sheet.row_count} fila(s), ${sheet.required_columns}/${requiredColumns.length} columnas obligatorias`;
     return `<option value="${escapeAttr(sheet.name)}">${escapeHtml(sheet.name)} - ${escapeHtml(status)}</option>`;
   }).join('');
   select.value = excel.sheet_name || sheets[0].name;
@@ -237,7 +237,7 @@ function renderExcelSheets() {
     const current = sheets.find(sheet => sheet.name === select.value);
     hint.textContent = current?.valid
       ? 'Esta pestaña contiene todas las columnas obligatorias.'
-      : `Se han reconocido ${current?.required_columns || 0} de ${REQUIRED_FIELDS.length} columnas obligatorias.`;
+      : `Se han reconocido ${current?.required_columns || 0} de ${requiredColumns.length} columnas obligatorias.`;
   };
   select.onchange = updateHint;
   updateHint();
