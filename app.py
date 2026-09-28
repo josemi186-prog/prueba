@@ -166,7 +166,7 @@ def sync_active_template(state: dict) -> None:
 
 def default_state() -> dict:
     builtin = builtin_template_record()
-    return {
+    state = {
         "students": default_students(),
         "excel": {"filename": "Datos de ejemplo", "uploaded_at": None, "columns": ALL_COLUMNS},
         "templates": [builtin],
@@ -201,6 +201,17 @@ def default_state() -> dict:
         "manual_email_attachment": {"filename": None, "path": None, "uploaded_at": None},
         "last_generation": None,
     }
+    environment_email = os.environ.get("EMAIL_SETTINGS_JSON", "").strip()
+    if environment_email:
+        try:
+            email_settings = json.loads(environment_email)
+            for section in ("smtp", "email_template"):
+                values = email_settings.get(section)
+                if isinstance(values, dict):
+                    state["settings"][section].update(values)
+        except (ValueError, AttributeError):
+            raise ValueError("EMAIL_SETTINGS_JSON debe contener un objeto JSON válido.") from None
+    return state
 
 
 def load_state() -> dict:
