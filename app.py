@@ -238,6 +238,12 @@ def migrate_state(state: dict) -> None:
     state["settings"].setdefault("filename_base", "Certificado")
     state["settings"].setdefault("smtp", {})
     state["settings"].setdefault("email_template", {})
+    if os.environ.get("EMAIL_SETTINGS_JSON", "").strip() and not any(
+        clean_value(state["settings"]["smtp"].get(key))
+        for key in ("host", "username", "from_email")
+    ):
+        state["settings"]["smtp"].update(defaults["settings"]["smtp"])
+        state["settings"]["email_template"].update(defaults["settings"]["email_template"])
     for key, value in defaults["settings"]["smtp"].items():
         state["settings"]["smtp"].setdefault(key, value)
     for key, value in defaults["settings"]["email_template"].items():
